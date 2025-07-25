@@ -1,0 +1,14 @@
+# Základní závislosti z původní aplikace
+flask
+flask-cors
+requests
+beautifulsoup4
+
+# Testovací nástroje
+pytest
+pytest-cov
+pytest-mock
+responses
+
+# Pro mock objekty (součást Python 3.3+, ale pro jistotu)
+mock

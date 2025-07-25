@@ -1,212 +1,217 @@
-import pytest
-import json
+import unittest
 from unittest.mock import patch, Mock
-from app import app, GoogleSearcher
+import json
+from app import app
 
-@pytest.fixture
-def client():
-    """Flask test client"""
-    app.config['TESTING'] = True
-    with app.test_client() as client:
-        yield client
-
-@pytest.fixture
-def mock_search_results():
-    """Mock data pro testování"""
-    return {
-        'query': 'test query',
-        'results_count': 2,
-        'results': [
-            {
-                'title': 'Test Title 1',
-                'url': 'https://example1.com',
-                'description': 'Test description 1',
-                'position': 1
-            },
-            {
-                'title': 'Test Title 2',
-                'url': 'https://example2.com',
-                'description': 'Test description 2',
-                'position': 2
-            }
-        ],
-        'timestamp': '2024-01-01 12:00:00'
-    }
-
-class TestGoogleSearcher:
-    """Testy pro GoogleSearcher třídu"""
+class TestSearchApp(unittest.TestCase):
     
-    def test_init(self):
-        """Test inicializace"""
-        searcher = GoogleSearcher()
-        assert 'User-Agent' in searcher.headers
-        assert 'Mozilla' in searcher.headers['User-Agent']
+    def setUp(self):
+        """Nastavení testovacího prostředí"""
+        self.app = app.test_client()
+        self.app.testing = True
     
-    @patch('requests.get')
-    def test_search_success(self, mock_get):
+    def test_search_endpoint_exists(self):
+        """Test, že endpoint /search existuje"""
+        response = self.app.post('/search', 
+                                json={'query': 'test'},
+                                content_type='application/json')
+        self.assertNotEqual(response.status_code, 404)
+    
+    def test_search_empty_query(self):
+        """Test prázdného dotazu"""
+        response = self.app.post('/search', 
+                                json={'query': ''},
+                                content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('error', data)
+        self.assertEqual(data['error'], 'Query is empty')
+    
+    def test_search_missing_query(self):
+        """Test chybějícího parametru query"""
+        response = self.app.post('/search', 
+                                json={},
+                                content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('error', data)
+    
+    def test_search_invalid_json(self):
+        """Test nevalidního JSON"""
+        response = self.app.post('/search', 
+                                data='invalid json',
+                                content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+    
+    @patch('app.requests.get')
+    def test_search_successful_request(self, mock_get):
         """Test úspěšného vyhledávání"""
-        # Mock HTML response
+        # Mock HTML odpověď s výsledky
         mock_html = '''
         <html>
-            <div class="g">
-                <h3>Test Title</h3>
-                <a href="https://example.com">Link</a>
-                <span data-ved="true">Test description</span>
-            </div>
+            <body>
+                <div class="result">
+                    <a class="result__a" href="https://example.com">Example Title</a>
+                    <span class="result__snippet">Example snippet text</span>
+                </div>
+                <div class="result">
+                    <a class="result__a" href="https://test.com">Test Title</a>
+                    <span class="result__snippet">Test snippet text</span>
+                </div>
+            </body>
         </html>
         '''
         
         mock_response = Mock()
-        mock_response.content = mock_html.encode('utf-8')
-        mock_response.raise_for_status.return_value = None
+        mock_response.text = mock_html
         mock_get.return_value = mock_response
         
-        searcher = GoogleSearcher()
-        result = searcher.search('test query')
+        response = self.app.post('/search', 
+                                json={'query': 'test query'},
+                                content_type='application/json')
         
-        assert result['query'] == 'test query'
-        assert result['results_count'] >= 0
-        assert 'results' in result
-        assert 'timestamp' in result
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        
+        self.assertIn('results', data)
+        self.assertEqual(len(data['results']), 2)
+        
+        # Kontrola prvního výsledku
+        first_result = data['results'][0]
+        self.assertEqual(first_result['title'], 'Example Title')
+        self.assertEqual(first_result['link'], 'https://example.com')
+        self.assertEqual(first_result['snippet'], 'Example snippet text')
+        
+        # Kontrola druhého výsledku
+        second_result = data['results'][1]
+        self.assertEqual(second_result['title'], 'Test Title')
+        self.assertEqual(second_result['link'], 'https://test.com')
+        self.assertEqual(second_result['snippet'], 'Test snippet text')
     
-    @patch('requests.get')
-    def test_search_network_error(self, mock_get):
-        """Test chyby sítě"""
-        mock_get.side_effect = Exception("Network error")
+    @patch('app.requests.get')
+    def test_search_no_results(self, mock_get):
+        """Test vyhledávání bez výsledků"""
+        mock_html = '<html><body></body></html>'
         
-        searcher = GoogleSearcher()
+        mock_response = Mock()
+        mock_response.text = mock_html
+        mock_get.return_value = mock_response
         
-        with pytest.raises(Exception) as exc_info:
-            searcher.search('test query')
+        response = self.app.post('/search', 
+                                json={'query': 'no results query'},
+                                content_type='application/json')
         
-        assert "Chyba při vyhledávání" in str(exc_info.value)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        
+        self.assertIn('results', data)
+        self.assertEqual(len(data['results']), 0)
+    
+    @patch('app.requests.get')
+    def test_search_missing_snippet(self, mock_get):
+        """Test výsledku bez snippet"""
+        mock_html = '''
+        <html>
+            <body>
+                <div class="result">
+                    <a class="result__a" href="https://example.com">Example Title</a>
+                </div>
+            </body>
+        </html>
+        '''
+        
+        mock_response = Mock()
+        mock_response.text = mock_html
+        mock_get.return_value = mock_response
+        
+        response = self.app.post('/search', 
+                                json={'query': 'test'},
+                                content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        
+        self.assertEqual(len(data['results']), 1)
+        result = data['results'][0]
+        self.assertEqual(result['title'], 'Example Title')
+        self.assertEqual(result['link'], 'https://example.com')
+        self.assertEqual(result['snippet'], '')  # Prázdný snippet
+    
+    @patch('app.requests.get')
+    def test_search_url_encoding(self, mock_get):
+        """Test správného URL enkódování dotazu"""
+        mock_response = Mock()
+        mock_response.text = '<html><body></body></html>'
+        mock_get.return_value = mock_response
+        
+        query_with_spaces = 'test query with spaces'
+        
+        self.app.post('/search', 
+                     json={'query': query_with_spaces},
+                     content_type='application/json')
+        
+        # Kontrola, že byl request zavolán se správně enkódovanou URL
+        mock_get.assert_called_once()
+        called_url = mock_get.call_args[0][0]
+        self.assertIn('test%20query%20with%20spaces', called_url)
+    
+    @patch('app.requests.get')
+    def test_search_headers_sent(self, mock_get):
+        """Test, že se posílají správné hlavičky"""
+        mock_response = Mock()
+        mock_response.text = '<html><body></body></html>'
+        mock_get.return_value = mock_response
+        
+        self.app.post('/search', 
+                     json={'query': 'test'},
+                     content_type='application/json')
+        
+        # Kontrola hlaviček
+        mock_get.assert_called_once()
+        called_headers = mock_get.call_args[1]['headers']
+        self.assertEqual(called_headers['User-Agent'], 'Mozilla/5.0')
+    
+    @patch('app.requests.get')
+    def test_search_request_exception(self, mock_get):
+        """Test chování při výjimce v requests"""
+        mock_get.side_effect = Exception('Connection error')
+        
+        response = self.app.post('/search', 
+                                json={'query': 'test'},
+                                content_type='application/json')
+        
+        # Aplikace by měla spadnout nebo vrátit chybu
+        # V současné implementaci není exception handling
+        self.assertEqual(response.status_code, 500)
+    
+    def test_cors_enabled(self):
+        """Test, že CORS je povolen"""
+        response = self.app.options('/search')
+        # CORS hlavičky by měly být přítomny
+        self.assertIn('Access-Control-Allow-Origin', response.headers)
 
-class TestAPI:
-    """Testy pro API endpointy"""
-    
-    def test_health_endpoint(self, client):
-        """Test health check endpointu"""
-        response = client.get('/api/health')
-        assert response.status_code == 200
-        
-        data = json.loads(response.data)
-        assert data['status'] == 'OK'
-    
-    @patch('app.searcher.search')
-    def test_search_endpoint_success(self, mock_search, client, mock_search_results):
-        """Test úspěšného vyhledávání přes API"""
-        mock_search.return_value = mock_search_results
-        
-        response = client.post('/api/search', 
-                              json={'query': 'test query'},
-                              content_type='application/json')
-        
-        assert response.status_code == 200
-        
-        data = json.loads(response.data)
-        assert data['query'] == 'test query'
-        assert data['results_count'] == 2
-        assert len(data['results']) == 2
-        assert data['results'][0]['title'] == 'Test Title 1'
-    
-    def test_search_endpoint_empty_query(self, client):
-        """Test s prázdným dotazem"""
-        response = client.post('/api/search', 
-                              json={'query': ''},
-                              content_type='application/json')
-        
-        assert response.status_code == 400
-        
-        data = json.loads(response.data)
-        assert 'error' in data
-    
-    def test_search_endpoint_no_query(self, client):
-        """Test bez dotazu"""
-        response = client.post('/api/search', 
-                              json={},
-                              content_type='application/json')
-        
-        assert response.status_code == 400
-    
-    @patch('app.searcher.search')
-    def test_search_endpoint_error(self, mock_search, client):
-        """Test chyby při vyhledávání"""
-        mock_search.side_effect = Exception("Search error")
-        
-        response = client.post('/api/search', 
-                              json={'query': 'test query'},
-                              content_type='application/json')
-        
-        assert response.status_code == 500
-        
-        data = json.loads(response.data)
-        assert 'error' in data
-    
-    def test_export_json(self, client, mock_search_results):
-        """Test exportu do JSON"""
-        response = client.post('/api/export/json',
-                              json={'results': mock_search_results},
-                              content_type='application/json')
-        
-        assert response.status_code == 200
-        assert response.mimetype == 'application/json'
-        assert 'attachment' in response.headers.get('Content-Disposition', '')
-    
-    def test_export_csv(self, client, mock_search_results):
-        """Test exportu do CSV"""
-        response = client.post('/api/export/csv',
-                              json={'results': mock_search_results},
-                              content_type='application/json')
-        
-        assert response.status_code == 200
-        assert response.mimetype == 'text/csv'
-        assert 'attachment' in response.headers.get('Content-Disposition', '')
-    
-    def test_export_unsupported_format(self, client, mock_search_results):
-        """Test nepodporovaného formátu"""
-        response = client.post('/api/export/xml',
-                              json={'results': mock_search_results},
-                              content_type='application/json')
-        
-        assert response.status_code == 400
-        
-        data = json.loads(response.data)
-        assert 'error' in data
 
-class TestDataValidation:
-    """Testy pro validaci dat"""
+class TestSearchAppIntegration(unittest.TestCase):
+    """Integrační testy - vyžadují internetové připojení"""
     
-    def test_search_result_structure(self, mock_search_results):
-        """Test struktury výsledků vyhledávání"""
-        results = mock_search_results
-        
-        # Kontrola základní struktury
-        assert 'query' in results
-        assert 'results_count' in results
-        assert 'results' in results
-        assert 'timestamp' in results
-        
-        # Kontrola struktury jednotlivých výsledků
-        for result in results['results']:
-            assert 'title' in result
-            assert 'url' in result
-            assert 'description' in result
-            assert 'position' in result
-            
-            # Kontrola datových typů
-            assert isinstance(result['title'], str)
-            assert isinstance(result['url'], str)
-            assert isinstance(result['description'], str)
-            assert isinstance(result['position'], int)
+    def setUp(self):
+        self.app = app.test_client()
+        self.app.testing = True
     
-    def test_results_count_consistency(self, mock_search_results):
-        """Test konzistence počtu výsledků"""
-        results = mock_search_results
+    @unittest.skip("Přeskočeno - vyžaduje internetové připojení")
+    def test_real_search_request(self):
+        """Integrační test se skutečným požadavkem na DuckDuckGo"""
+        response = self.app.post('/search', 
+                                json={'query': 'python programming'},
+                                content_type='application/json')
         
-        actual_count = len(results['results'])
-        reported_count = results['results_count']
-        
-        assert actual_count == reported_count
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('results', data)
+        # Očekáváme alespoň nějaké výsledky pro běžný dotaz
+        self.assertGreater(len(data['results']), 0)
+
 
 if __name__ == '__main__':
-    pytest.main(['-v', __file__])
+    # Spuštění testů
+    unittest.main(verbosity=2)

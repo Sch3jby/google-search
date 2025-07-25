@@ -18,7 +18,6 @@ def search():
     if not query:
         return jsonify({'error': 'Query is empty'}), 400
 
-    # Použijeme DuckDuckGo
     search_url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
     response = requests.get(search_url, headers=HEADERS)
 
