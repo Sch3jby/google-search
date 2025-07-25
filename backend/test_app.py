@@ -297,34 +297,6 @@ class TestSearchApp(unittest.TestCase):
         self.assertEqual(second_result['snippet'].strip(), 'Another snippet')
 
 
-class TestSearchAppIntegration(unittest.TestCase):
-    """Integrační testy - vyžadují internetové připojení"""
-    
-    def setUp(self):
-        app.config['TESTING'] = True
-        self.client = app.test_client()
-    
-    @unittest.skip("Přeskočeno - vyžaduje internetové připojení")
-    def test_real_search_request(self):
-        """Integrační test se skutečným požadavkem na DuckDuckGo"""
-        response = self.client.post('/search', 
-                                   json={'query': 'python programming'},
-                                   content_type='application/json')
-        
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertIn('results', data)
-        # Očekáváme alespoň nějaké výsledky pro běžný dotaz
-        self.assertGreater(len(data['results']), 0)
-        
-        # Kontrola struktury skutečných výsledků
-        if data['results']:
-            result = data['results'][0]
-            self.assertIn('title', result)
-            self.assertIn('link', result)
-            self.assertIn('snippet', result)
-
-
 if __name__ == '__main__':
     # Spuštění testů s podrobným výstupem
     unittest.main(verbosity=2)

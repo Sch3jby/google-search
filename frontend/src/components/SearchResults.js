@@ -10,12 +10,14 @@ const SearchResults = ({ results, query, onClear }) => {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '20px'
+            marginBottom: '20px',
+            flexWrap: 'wrap',
+            gap: '10px'
           }}>
             <h2 style={{ margin: 0, fontSize: '1.3rem', color: '#333' }}>
               Nalezeno {results.length} výsledků
             </h2>
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <ExportButtons results={results} query={query} />
               <button onClick={onClear} className="btn btn-danger">
                 Vymazat
@@ -45,7 +47,8 @@ const SearchResults = ({ results, query, onClear }) => {
                   padding: '4px 12px',
                   borderRadius: '16px',
                   fontSize: '14px',
-                  fontWeight: 'bold'
+                  fontWeight: 'bold',
+                  flexShrink: 0
                 }}>
                   #{index + 1}
                 </span>
@@ -62,7 +65,11 @@ const SearchResults = ({ results, query, onClear }) => {
                   rel="noopener noreferrer"
                   style={{
                     color: '#007bff',
-                    textDecoration: 'none'
+                    textDecoration: 'none',
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word',
+                    wordBreak: 'break-word',
+                    lineHeight: '1.3'
                   }}
                   onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
                   onMouseOut={(e) => e.target.style.textDecoration = 'none'}
@@ -76,10 +83,16 @@ const SearchResults = ({ results, query, onClear }) => {
                   href={result.link}
                   target="_blank"
                   rel="noopener noreferrer"
+                  className="url-link"
                   style={{
                     color: '#28a745',
                     fontSize: '14px',
-                    textDecoration: 'none'
+                    textDecoration: 'none',
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word',
+                    wordBreak: 'break-all',
+                    lineHeight: '1.4',
+                    display: 'block'
                   }}
                 >
                   {result.link}
@@ -91,7 +104,9 @@ const SearchResults = ({ results, query, onClear }) => {
                   color: '#666',
                   lineHeight: '1.5',
                   margin: 0,
-                  fontSize: '15px'
+                  fontSize: '15px',
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word'
                 }}>
                   {result.snippet}
                 </p>

@@ -90,8 +90,61 @@ body {
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   margin-bottom: 20px;
+  overflow: hidden;
 }
 
 .card-body {
   padding: 20px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-all;
+}
+
+/* Specifické styly pro odkazy */
+.card-body a {
+  /* Zajištění že odkazy se zalamují */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-all;
+  /* Zachování čitelnosti u dlouhých URL */
+  hyphens: auto;
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* Specifické styly pro nadpisy odkazů */
+.card-body h3 a {
+  word-break: break-word;
+  line-height: 1.3;
+}
+
+/* Pro URL odkazy (zelené) */
+.card-body .url-link {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+/* Zajištění že celý kontejner se správně chová */
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  overflow-x: hidden;
+}
+
+/* Responzivní úpravy */
+@media (max-width: 768px) {
+  .app {
+    padding: 10px;
+  }
+  
+  .container {
+    max-width: 100%;
+  }
+  
+  .card-body {
+    padding: 15px;
+    word-break: break-word;
+  }
 }
